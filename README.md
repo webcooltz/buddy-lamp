@@ -4,14 +4,16 @@ Code for the Buddy Lamp project.
 
 ## Running the server
 
-Run locally:
+### Run locally:
+
 * Download this repo
 * Open the Server folder in VS Code or a terminal
 * Open the terminal
 * Run `npm i`
 * Run `npm run start`
 
-Run on a hosted site (Render.com):
+### Run on a hosted site (Render.com):
+
 * Go to Render.com
 * Sign up for an account
 * Go to the dashboard
