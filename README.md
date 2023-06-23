@@ -37,9 +37,12 @@ Code for the Buddy Lamp project.
 
 ## Running the client
 
-### Installing
+### Installing/Running
 
-TBD
+* Download the client repo to your Raspberry Pi
+* Alter the values (see the section below this)
+* Open a terminal, go to the directory where the file is
+* Run `python main.py`
 
 ### Customizing
 
