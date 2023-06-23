@@ -1,12 +1,10 @@
 const express = require('express');
 const router = express.Router();
 
-// router.use('/login', require('./login'));
 router.use('/messages', require('./messages'));
-// router.use('/api-docs', require('./swagger'));
 
-router.get('/', function(req, res, next) {
-  res.send('welcome :)');
+router.get('/', function(req, res) {
+  res.send('welcome to buddy lamp :)');
 });
 
 router.get('*', (req, res) => {

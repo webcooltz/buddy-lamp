@@ -1,10 +1,10 @@
 // Message Model
 
 class Message {
-    constructor(id, household, date) {
+    constructor(id, date, household) {
         this.id = id;
-        this.household = household;
         this.date = date;
+        this.household = household;
     }
 }
   

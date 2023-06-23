@@ -5,9 +5,6 @@ const logfilePath = "./results/logfile.txt";
 
 // Main function
 const writeToLogfile = (dataToBeLogged) => {
-  // Adds timestamp
-  // dataToBeLogged = dataToBeLogged + " " + new Date().toLocaleString();
-
   fs.readFile(logfilePath, 'utf8', (err, data) => {
     if (err) {
       console.error(`Error reading logfile.\nPath: ${logfilePath}\nError: ${err}`);
@@ -22,6 +19,7 @@ const writeToLogfile = (dataToBeLogged) => {
         lines[lines.length - 1] = updatedLine;
       } else {
         // If the last line does not match, append the new log entry as a new line
+        // add timestamp
         dataToBeLogged = dataToBeLogged + " - " + new Date().toLocaleString();
         lines.push(dataToBeLogged);
       }
@@ -35,8 +33,8 @@ const writeToLogfile = (dataToBeLogged) => {
           console.log(`Data written to logfile: ${logfilePath}`);
         }
       }); 
-    } // End of if/else
-  }); // End of fs.readFile
+    }
+  });
 };
 
 const getCount = (line) => {

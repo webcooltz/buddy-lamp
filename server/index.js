@@ -1,10 +1,18 @@
+// Server entry point
+
+// ---Imports/dependencies---
 const express = require('express');
-const port = process.env.PORT || 3000;
-var logger = require('morgan');
+const logger = require('morgan');
 const bodyParser = require('body-parser');
 
+// ---Helpers---
+const logfileModule = require('./utilities/logfile');
+
+// ---Vars---
+const port = 3000;
 const app = express();
 
+// --Use middleware--
 app
   .use(bodyParser.json())
   .use(logger('dev'))
@@ -21,6 +29,13 @@ app
     next();
   })
   .use('/', require('./routes'));
-
-app.listen(port);
-console.log(`Server started on port ${port}`);
+  
+// ---Start server--
+try {
+  app.listen(port);
+  console.log(`Server listening on port ${port}`);
+} catch (err) {
+  const errorMessage = `Error - Cannot start server:\n${err}`;
+  console.error(errorMessage);
+  logfileModule.writeToLogfile(errorMessage);
+}

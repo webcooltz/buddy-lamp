@@ -1,4 +1,4 @@
-### GET messages
+### GET color
 GET http://localhost:3000/messages
 
 ### POST message
