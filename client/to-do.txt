@@ -1,0 +1,12 @@
+Auto-run
+-Automatically run the client on bootup
+-Test LEDs on bootup
+
+Hardware
+-Try neopixel strip
+-Come up with case design (cardboard or otherwise?)
+-Use acryllic sheeting or other thing to amplify the light
+-Help wires stay secure -- soldering needed?
+-Is breadboard needed? Or how do I move forward?
+-See if RPI Pico would work with this
+  -See hardware specs and specs of my app
