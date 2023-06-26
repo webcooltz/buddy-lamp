@@ -21,6 +21,7 @@ my_color = "red"
 # ****
 
 current_color = ""
+seconds_between_requests = 10
 
 # ---GPIO stuff---
 GPIO.setmode(GPIO.BCM)
@@ -148,5 +149,7 @@ GPIO.add_event_detect(button_pin, GPIO.FALLING,
 
 # Loop to keep it listening/requesting
 while True:
+    # Change the current_color to whatever the server color is
     current_color = get_color(current_color, led_pin_number, led_pin_number2)
-    time.sleep(10)  # Wait for 10 minutes (600 seconds) before the next request
+    # Wait for x seconds before the next request
+    time.sleep(seconds_between_requests)
