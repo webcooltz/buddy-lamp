@@ -1,4 +1,5 @@
-# pip install RPi.GPIO
+# -gets server color every 10 minutes
+# -sets server color to your color when button is pressed
 
 import time
 import requests
@@ -8,14 +9,15 @@ except ModuleNotFoundError:
     print("RPi module not found. Are you running on a Raspberry Pi?")
 
 # change these
-button_pin = 17  # GPIO pin connected to the button
-api_url = "https://buddy-lamp.onrender.com/messages"
+api_url = "https://[YOUR_URL]"
 my_household_name = "Johnson"
 my_color = "red"
-current_color = "red"
+current_color = ""
 
+# Button stuff
+button_pin = 2  # GPIO pin connected to the button
 GPIO.setmode(GPIO.BCM)
-GPIO.setup(button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(button_pin, GPIO.IN)
 
 
 def get_color(color_currently):
@@ -55,12 +57,16 @@ def change_color(household_name, color):
         print(f"Request error: {e}")
 
 
-def button_callback(household_name, color, channel):
+def button_callback(channel, household_name, color):
     change_color(household_name, color)
 
 
-GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=button_callback, bouncetime=300)
+GPIO.add_event_detect(button_pin, GPIO.FALLING, callback=lambda channel: button_callback(channel, my_household_name, my_color), bouncetime=300)
 
 while True:
     current_color = get_color(current_color)
-    time.sleep(600)  # Wait for 10 minutes (600 seconds) before the next request
+    time.sleep(10)  # Wait for 10 minutes (600 seconds) before the next request
+    pass
+
+# Cleanup GPIO
+GPIO.cleanup()
