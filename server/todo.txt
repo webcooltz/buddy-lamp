@@ -1,1 +1,18 @@
--implement cleanup for logfile, messages, etc.
+Recycling
+-Implement cleanup for logfile, messages, etc.
+
+Make universal
+-Research how to make it so anyone can sign up and use it out of the box
+-Server/db
+  -Server/db for each set?
+  -Server/db and auth?
+-Pre-build
+  -Make them so they work OOTB - all data filled in (pin numbers)
+  -Users login to change their specific data
+
+Make multiple colors work
+-Use neopixels
+-Accept any color input (any that I can create with neopixel)
+
+Look into db
+-Lite type of DBs to store the simple data?
