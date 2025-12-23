@@ -126,6 +126,8 @@ def change_color(household_name, color, led_pin, led_pin2):
         if response.status_code == 201:
             GPIO.output(led_pin2, GPIO.LOW)
             GPIO.output(led_pin, GPIO.HIGH)
+            global current_color
+            current_color = color
             print("201: Color change request successful!")
         else:
             print("Color change request failed!")
