@@ -15,13 +15,13 @@ except ModuleNotFoundError:
     print("RPi module not found. Are you running on a Raspberry Pi?")
 
 # *---change these---*
-api_url = "https://URL"
+api_url = "https://URL/messages"
 my_household_name = "Johnson"
 my_color = "red"
 # ****
 
 current_color = ""
-seconds_between_requests = 10
+seconds_between_requests = 5
 
 # ---GPIO stuff---
 GPIO.setmode(GPIO.BCM)
@@ -102,6 +102,18 @@ def change_color(household_name, color, led_pin, led_pin2):
             Nothing.
     """
     try:
+        if not household_name or not color:
+            print("Household name or color is missing!")
+            return
+        if color not in ["white", "blue", "red", "green"]:
+            print("Invalid color value!")
+            return
+        if not api_url:
+            print("API URL is missing!")
+            return
+        if not led_pin or not led_pin2:
+            print("LED pin numbers are missing!")
+            return
         payload = {
             "household": {
                 "name": household_name,
@@ -138,7 +150,12 @@ def button_callback(household_name, color, led_pin, led_pin2):
     global button_pressed
     if not button_pressed:
         button_pressed = True
-        change_color(household_name, color, led_pin, led_pin2)
+
+        # Only send if server color is not already my color
+        if current_color != my_color:
+            change_color(household_name, color, led_pin, led_pin2)
+        else:
+            print("Server color already matches my color; skipping POST request.")
     button_pressed = False  # Reset button state
 
 
