@@ -28,7 +28,7 @@ app
     );
     next();
   })
-  .use('/', require('./routes'));
+  .use('/', require('./routes/index.routes'));
   
 // ---Start server--
 try {

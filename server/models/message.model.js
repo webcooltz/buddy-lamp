@@ -4,8 +4,7 @@ class Message {
     constructor(id, date, household) {
         this.id = id;
         this.date = date;
-        this.household = household;
-    }
+        this.household = household;}
 }
   
 module.exports = Message;

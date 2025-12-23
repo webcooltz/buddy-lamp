@@ -4,9 +4,9 @@
   "description": "a buddy lamp server. touch the lamp to send the lamp color over",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jasmine",
     "start": "node index.js",
-    "start-dev": "nodemon index.js",
+    "dev": "nodemon index.js",
     "lint": "eslint . --ext .js"
   },
   "author": "webcooltz",
@@ -21,6 +21,7 @@
     "eslint": "^8.32.0",
     "eslint-config-prettier": "^8.6.0",
     "eslint-plugin-prettier": "^4.2.1",
+    "jasmine": "^5.0.2",
     "nodemon": "^1.14.9",
     "prettier": "^2.8.3"
   }

@@ -16,20 +16,26 @@ const fs = require('fs');
 // ---Helpers---
 const logfileModule = require('../utilities/logfile');
 // ---Models---
-const Message = require('../models/message');
+const Message = require('../models/message.model');
 // ---Filepaths---
 const messagesPath = './results/messages.json';
+// ---Const---
+const WHITE_COLOR = "white";
+const BLUE_COLOR = "blue";
+const RED_COLOR = "red";
+const GREEN_COLOR = "green";
+const validColors = [WHITE_COLOR, BLUE_COLOR, RED_COLOR, GREEN_COLOR];
 
 // ----------- GET messages ------------ //
 
-/* getCurrentColor():
+/* GET - getCurrentColor():
     -get the current color from the last message and return it
     -uses: readMessages(), getLastColor()
 */
 const getCurrentColor = (req, res) => {
     readMessages()
         .then((messages) => {
-            let currentColor = "white";
+            let currentColor = WHITE_COLOR;
 
             console.log(`messages: ${messages}`);
 
@@ -44,7 +50,7 @@ const getCurrentColor = (req, res) => {
                 });
             } else {
                 currentColor = getLastColor(messages);
-                currentColor = !currentColor ? "white" : currentColor;
+                currentColor = !currentColor ? WHITE_COLOR : currentColor;
 
                 const successMessage = `Success - Current color retrieved: ${currentColor}`;
                 console.log(successMessage);
@@ -64,7 +70,7 @@ const getCurrentColor = (req, res) => {
         });
 };
 
-/* readMessages():
+/* HELPER - readMessages():
     -read the messages.json file
     -return the messages
 */
@@ -114,7 +120,7 @@ function readMessages() {
     });
 }
 
-/* getLastColor():
+/* HELPER getLastColor():
     -get the last color from the messages (returned from readMessages())
 */
 function getLastColor(messages) {
@@ -124,13 +130,13 @@ function getLastColor(messages) {
         let currentColor;
 
         if (!lastMessage) {
-            currentColor = "white";
+            currentColor = WHITE_COLOR;
 
-            const warningMessage = `Warning - Could not get current color (message.js - getCurrentColor()): No color found. White used.`;
+            const warningMessage = `Warning - Could not get current color\n--(message.js - getCurrentColor()):\n--No color found. White used.`;
             console.log(warningMessage);
             logfileModule.writeToLogfile(warningMessage);
         } else {
-            currentColor = lastMessage.household.color
+            currentColor = lastMessage?.household?.color || "white";
             
             const successMessage = `Success - Current color retrieved: ${currentColor}`;
             console.log(successMessage);
@@ -149,7 +155,7 @@ function getLastColor(messages) {
 
 // ----------- POST message ------------ //
 
-/* sendMessage()
+/* POST - sendMessage()
     -receives: household
     -generates: id, date
     -saves message
@@ -162,6 +168,12 @@ const sendMessage = (req, res) => {
     const newId = generateId();
     const timestamp = new Date();
     const message = new Message(newId, timestamp, req.body.household);
+    const household = req.body.household;
+
+    // use only valid colors (whichever LEDs we have assigned)
+    if (!validateColor(household.color)) {
+        return res.status(400).json({ message: "Invalid color value" });
+    }
 
     // Save the message to a JSON file
     saveMessage(message)
@@ -180,6 +192,8 @@ const sendMessage = (req, res) => {
             res.status(500).json({ message: 'Message failed to send' });
         });
 };
+
+// ------------- Helper functions ------------- //
 
 /* generateId():
     -Generate a new numeric ID for the message
@@ -243,6 +257,10 @@ function saveMessage(message) {
             }
         });
     });
+}
+
+function validateColor(color) {
+    return validColors.includes(color);
 }
 
 module.exports = { getCurrentColor, sendMessage };
