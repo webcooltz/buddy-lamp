@@ -1,53 +1,86 @@
 # buddy-lamp
 
-Code for the Buddy Lamp project.
+A wifi lamp project.
 
-## Running the server
+## Server
 
-### Run locally:
+### Setup
 
-* Download this repo
-* Open the Server folder in VS Code or a terminal
-* Open the terminal
-* Run `npm i`
-* Run `npm run start`
+* Download the buddy-lamp folder (only onto one machine in the network).
+* Put buddy-lamp folder in the Documents folder.
+* Follow the directions below to start up the server on boot.
 
-### Run on a hosted site (Render.com):
+### Port Forwarding
 
-* Go to Render.com
-* Sign up for an account
-* Go to the dashboard
-* Create a new app (web service)
+* You will need to forward ports on your router to allow the server to be accessed from outside your home network.
 
-![image](https://github.com/webcooltz/buddy-lamp/assets/22669410/f221cb16-079f-407d-9ffa-6bbd3d80e292)
+### Start Server on Boot
 
-* Use this repo as the code
+#### Create Server Start Script
 
-![image](https://github.com/webcooltz/buddy-lamp/assets/22669410/6f30ae16-8b0e-4d1b-8ae3-a84f701737d4)
+* Create a shell script called start-server.sh in ~/Documents:
+`nano ~/Documents/start-server.sh`
 
-* Use the "main" branch and the folder "server"
+* Paste the following into it:
+```
+#!/bin/bash
 
-![image](https://github.com/webcooltz/buddy-lamp/assets/22669410/0b541af8-56ca-4214-a7cf-452b96c4f580)
+# Navigate to the server folder
+cd /home/pi/Documents/buddy-lamp/server || { echo "Server folder not found!"; exit 1; }
 
-* Use the Build Command `npm i`
-* Use the Start Command `npm run start`
-* Set Auto-Deploy to "Yes" (this will auto-deploy when I push changes)
+# Run npm (use full path to npm)
+ /usr/bin/npm run start
+```
 
-![image](https://github.com/webcooltz/buddy-lamp/assets/22669410/cc9bd44c-0de3-4fbf-a7ac-9abd9a23dbd2)
+* Make the script executable:
+`chmod +x ~/Documents/start-server.sh`
 
-## Running the client
+* Create a systemd service:
+`sudo nano /etc/systemd/system/buddy-lamp.service`
+
+* Paste the following into it:
+```
+[Unit]
+Description=Buddy Lamp Node Server
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/Documents/buddy-lamp/server
+ExecStart=/home/pi/Documents/start-server.sh
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+```
+
+#### Enable and Start the Service
+
+* Reload systemd to detect the new service:
+`sudo systemctl daemon-reload`
+
+* Enable the service to start on boot:
+`sudo systemctl enable buddy-lamp.service`
+
+* Start the service immediately:
+`sudo systemctl start buddy-lamp.service`
+
+* Check its status:
+`sudo systemctl status buddy-lamp.service`
+
+## Client Setup
 
 ### Installing/Running
 
-* Download the client repo to your Raspberry Pi
-* Alter the values (see the section below this)
-* Open a terminal, go to the directory where the file is
-* Run `python main.py`
+* Download the `client` repo to your Raspberry Pi.
+* Alter the values (see the section below this).
+* Open a terminal, go to the directory where the file is.
+* Run `python main.py`.
 
 ### Customizing
 
 Hard-coding
-* Hard-code the values for household name and lamp color
-
-Making requests
-* Your URL will need to be changed to your Render address (or other host address)
+* Hard-code the values for API URL, household name, and lamp color.
+<img width="246" height="92" alt="image" src="https://github.com/user-attachments/assets/b094d7ce-7fe7-48a5-b04a-539bc4cb198a" />
