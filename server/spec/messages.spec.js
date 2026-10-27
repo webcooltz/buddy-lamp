@@ -1,225 +1,212 @@
-// const { describe, it, expect } = require('@jest/globals');
-// const request = require('supertest');
-// const app = require('../index');
-// const port = 3000;
-// const messageController = require('../controllers/message');
+// Run with `npm test` (from /server). Uses a throwaway data dir so real messages are untouched.
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const http = require('http');
 
-// const getCurrentColor = require('./message'); // Import the function to be tested
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'buddy-lamp-spec-'));
+process.env.BUDDY_LAMP_DATA_DIR = dataDir;
+const SECRET = 'spec-secret-123';
+process.env.BUDDY_LAMP_SECRET = SECRET;
 
-// describe('getCurrentColor', () => {
-//   // Test case for no messages
-//   it('should return white when no messages are found', (done) => {
-//     const req = {}; // Mock request object
-//     const res = {
-//       status: (code) => {
-//         expect(code).toEqual(200); // Expect status code 200
-//         return {
-//           json: (data) => {
-//             expect(data.color).toEqual('white'); // Expect color to be white
-//             done(); // Signal test completion
-//           }
-//         };
-//       }
-//     };
+const app = require('../index');
 
-//     getCurrentColor(req, res);
-//   });
+const messagesPath = (family) => path.join(dataDir, `messages-${family}.json`);
 
-//   // Test case for messages with last color
-//   it('should return the last color from messages', (done) => {
-//     const messages = [
-//       { color: 'red' },
-//       { color: 'green' },
-//       { color: 'blue' }
-//     ];
-//     const req = {}; // Mock request object
-//     const res = {
-//       status: (code) => {
-//         expect(code).toEqual(200); // Expect status code 200
-//         return {
-//           json: (data) => {
-//             expect(data.color).toEqual('blue'); // Expect color to be blue
-//             done(); // Signal test completion
-//           }
-//         };
-//       }
-//     };
+function request(port, method, urlPath, { body, headers = {} } = {}) {
+  return new Promise((resolve, reject) => {
+    const payload = body === undefined ? null : (typeof body === 'string' ? body : JSON.stringify(body));
+    const allHeaders = payload ? { 'Content-Type': 'application/json', ...headers } : headers;
+    const req = http.request({ port, method, path: urlPath, headers: allHeaders }, (res) => {
+      let raw = '';
+      res.on('data', (chunk) => (raw += chunk));
+      res.on('end', () => {
+        let json = null;
+        try { json = JSON.parse(raw); } catch (e) { /* not JSON */ }
+        resolve({ status: res.statusCode, json, raw, headers: res.headers });
+      });
+    });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
 
-//     spyOn(global, 'readMessages').and.returnValue(Promise.resolve(messages)); // Mock readMessages function
+describe('buddy-lamp server', () => {
+  let server;
+  let port;
 
-//     getCurrentColor(req, res);
-//   });
+  beforeAll((done) => {
+    server = app.listen(0, () => {
+      port = server.address().port;
+      done();
+    });
+  });
 
-//   // Test case for error retrieving messages
-//   it('should return 500 status with error message on failure', (done) => {
-//     const req = {}; // Mock request object
-//     const res = {
-//       status: (code) => {
-//         expect(code).toEqual(500); // Expect status code 500
-//         return {
-//           json: (data) => {
-//             expect(data.message).toEqual('Failed to retrieve color'); // Expect error message
-//             done(); // Signal test completion
-//           }
-//         };
-//       }
-//     };
+  afterAll((done) => {
+    server.close(() => {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+      done();
+    });
+  });
 
-//     spyOn(global, 'readMessages').and.returnValue(Promise.reject('Error retrieving messages')); // Mock readMessages function
+  beforeEach(() => {
+    fs.readdirSync(dataDir).forEach((f) => fs.rmSync(path.join(dataDir, f), { force: true }));
+  });
 
-//     getCurrentColor(req, res);
-//   });
-// });
+  const auth = (family = 'fam1', secret = SECRET) => ({ 'X-Buddy-Secret': secret, 'X-Buddy-Family': family });
+  const get = (family) => request(port, 'GET', '/messages', { headers: auth(family) });
+  const post = (household, family) => request(port, 'POST', '/messages', { body: { household }, headers: auth(family) });
 
+  describe('colors', () => {
+    it('returns white when there are no messages', async () => {
+      const res = await get();
+      expect(res.status).toBe(200);
+      expect(res.json).toEqual({ color: 'white' });
+    });
 
-// describe('Message tests', () => {
-//     const mockHousehold = {
-//         name: "Smith",
-//         color: "red"
-//     };
-//     // let messageId;
-//     // let date;
+    it('returns white when the messages file is empty', async () => {
+      fs.writeFileSync(messagesPath('fam1'), '');
+      expect((await get()).json).toEqual({ color: 'white' });
+    });
 
-//     beforeAll(async () => {
-//         await app.listen(port);
-//     });
+    it('returns the color of the last message', async () => {
+      expect((await post({ name: 'a', color: 'red' })).status).toBe(201);
+      expect((await post({ name: 'b', color: 'blue' })).status).toBe(201);
+      expect((await get()).json).toEqual({ color: 'blue' });
+    });
 
-//     // GET /messages response
-//     // *not working*
-//     it('route should respond with status 200', (done) => {
-//         request(app)
-//             .get('/messages')
-//             .expect(200)
-//             .end((err, res) => { 
-//             if (err) return done.fail(err);
-//             done();
-//         });
-//     });
+    it('assigns incrementing ids', async () => {
+      await post({ name: 'a', color: 'red' });
+      await post({ name: 'a', color: 'green' });
+      const saved = JSON.parse(fs.readFileSync(messagesPath('fam1'), 'utf8'));
+      expect(saved.map((m) => m.id)).toEqual([1, 2]);
+    });
 
-//     // POST new message
-//     // *not working*
-//     it('should create a new student', async () => {
-//         const mockReq = {
-//             body: {
-//                 household: mockHousehold,
-//             }
-//         };
-//         const mockRes = {
-//             status: (statusCode) => ({
-//                 json: (data) => {
-//                     mockRes.statusCode = statusCode;
-//                     mockRes.data = data;
-//                     return mockRes;
-//                 },
-//             })
-//         };
-    
-//         await messageController.createStudent(mockReq, mockRes);
-//         // newStudentId = mockRes.data.student._id;
-    
-//         expect(mockRes.data.message).toBe("Created new student successfully.");
-//         expect(mockRes.statusCode).toBe(201);
-//         expect(mockRes.data.student.firstName).toBe('Johnny');
-//         expect(mockRes.data.student.lastName).toBe('Baker');
-//         expect(mockRes.data.student.email).toBe('johnny.baker@example.edu');
-//         expect(mockRes.data.student.creditHours).toBe(61);
-//     }, 10000);
+    it('treats legacy messages without a household as white', async () => {
+      fs.writeFileSync(messagesPath('fam1'), JSON.stringify([{ id: 1, date: '2025-01-01T00:00:00Z' }]));
+      expect((await get()).json).toEqual({ color: 'white' });
+      expect((await post({ name: 'a', color: 'red' })).status).toBe(201);
+    });
 
-//     // *working*
-//     it('mongoose validation error', async () => {
-//         // empty body
-//         const mockReq = {
-//             body: {}
-//         };
-//         const mockRes = {
-//             status: (statusCode) => ({
-//                 json: (data) => {
-//                     mockRes.statusCode = statusCode;
-//                     mockRes.data = data;
-//                     return mockRes;
-//                 },
-//             })
-//         };
-    
-//         await messageController.createStudent(mockReq, mockRes);
-    
-//         expect(mockRes.data.message).toBe("Student validation failed: firstName: Path `firstName` is required., lastName: Path `lastName` is required., email: Path `email` is required.");
-//         expect(mockRes.statusCode).toBe(400);
-//     }, 10000);
+    it('caps stored messages', async () => {
+      for (let i = 0; i < 105; i++) {
+        await post({ name: 'a', color: i % 2 ? 'red' : 'blue' });
+      }
+      const saved = JSON.parse(fs.readFileSync(messagesPath('fam1'), 'utf8'));
+      expect(saved.length).toBe(100);
+      expect(saved[saved.length - 1].id).toBe(105);
+    });
+  });
 
-//     // PUT update new student
-//     // *working*
-//     it('should update the new student', async () => {
-//         if (newStudentId) {
-//             studentId = newStudentId;
-//         } else {
-//             console.log("PUT student - newStudentId error");
-//             return;
-//         }
-//         const altStudent = {
-//             firstName: "John",
-//             lastName: "BGood",
-//             email: "johnny.bgood@example.edu",
-//             creditHours: 70
-//         };
-//         const mockPutReq = {
-//             params: {
-//                 id: studentId
-//             },
-//             body: {
-//                 firstName: altStudent.firstName,
-//                 lastName: altStudent.lastName,
-//                 email: altStudent.email,
-//                 creditHours: altStudent.creditHours
-//             }
-//         };
-//         const mockPutRes = {
-//             status: (statusCode) => ({
-//                 json: (data) => {
-//                     mockPutRes.statusCode = statusCode;
-//                     mockPutRes.data = data;
-//                     return mockPutRes;
-//                 },
-//               })
-//         };
-    
-//         await messageController.updateStudent(mockPutReq, mockPutRes);
-    
-//         expect(mockPutRes.data.message).toBe("Updated student successfully.");
-//         expect(mockPutRes.statusCode).toBe(204);
-//         expect(mockPutRes.data.student.firstName).toBe('John');
-//         expect(mockPutRes.data.student.lastName).toBe('BGood');
-//         expect(mockPutRes.data.student.email).toBe('johnny.bgood@example.edu');
-//         expect(mockPutRes.data.student.creditHours).toBe(70);
-//     }, 10000);
+  describe('families', () => {
+    it('keeps each family color separate', async () => {
+      await post({ name: 'a', color: 'red' }, 'smiths');
+      await post({ name: 'b', color: 'blue' }, 'joneses');
+      expect((await get('smiths')).json).toEqual({ color: 'red' });
+      expect((await get('joneses')).json).toEqual({ color: 'blue' });
+      expect((await get('nobody')).json).toEqual({ color: 'white' });
+    });
 
-//     // DELETE 1 student
-//     // *working*
-//     it('should delete 1 student', async () => {
-//         if (newStudentId) {
-//             studentId = newStudentId;
-//         } else {
-//             console.log("Deletion error. newStudentId failed.");
-//             return;
-//         }
-//         const mockDeleteReq = {
-//             params: {
-//               id: studentId
-//             }
-//           };
-//         const mockDeleteRes = {
-//             status: (statusCode) => ({
-//                 json: (data) => {
-//                     mockDeleteRes.statusCode = statusCode;
-//                     mockDeleteRes.data = data;
-//                     return mockDeleteRes;
-//                 },
-//             })
-//         };
+    it('ignores family case and whitespace', async () => {
+      await post({ name: 'a', color: 'red' }, 'Smiths');
+      expect((await get('smiths')).json).toEqual({ color: 'red' });
+    });
 
-//         await messageController.deleteStudent(mockDeleteReq, mockDeleteRes);
+    it('rejects missing or unsafe family names with 400', async () => {
+      const bad = ['', '../etc', 'a/b', 'a b', 'x'.repeat(33)];
+      for (const family of bad) {
+        expect((await get(family)).status).toBe(400);
+      }
+    });
+  });
 
-//         expect(mockDeleteRes.statusCode).toBe(200);
-//         expect(mockDeleteRes.data.message).toBe("Deleted student successfully.");
-//     }, 10000);
-// });
+  describe('auth', () => {
+    it('rejects a missing or wrong secret with 401', async () => {
+      expect((await request(port, 'GET', '/messages', { headers: { 'X-Buddy-Family': 'fam1' } })).status).toBe(401);
+      expect((await request(port, 'GET', '/messages', { headers: auth('fam1', 'wrong') })).status).toBe(401);
+      expect((await request(port, 'POST', '/messages', {
+        body: { household: { name: 'a', color: 'red' } }, headers: auth('fam1', 'wrong')
+      })).status).toBe(401);
+    });
+
+    it('does not save anything for unauthorized posts', async () => {
+      await request(port, 'POST', '/messages', {
+        body: { household: { name: 'a', color: 'red' } }, headers: auth('fam1', 'wrong')
+      });
+      expect(fs.existsSync(messagesPath('fam1'))).toBe(false);
+    });
+
+    it('fails closed when the server has no secret configured', async () => {
+      delete process.env.BUDDY_LAMP_SECRET;
+      try {
+        expect((await get()).status).toBe(500);
+      } finally {
+        process.env.BUDDY_LAMP_SECRET = SECRET;
+      }
+    });
+  });
+
+  describe('validation', () => {
+    it('rejects an invalid color with 400', async () => {
+      expect((await post({ name: 'a', color: 'purple' })).status).toBe(400);
+    });
+
+    it('rejects a missing household with 400 instead of crashing', async () => {
+      expect((await request(port, 'POST', '/messages', { body: {}, headers: auth() })).status).toBe(400);
+    });
+
+    it('rejects a missing or too-long name', async () => {
+      expect((await post({ color: 'red' })).status).toBe(400);
+      expect((await post({ name: '', color: 'red' })).status).toBe(400);
+      expect((await post({ name: 'x'.repeat(33), color: 'red' })).status).toBe(400);
+      expect((await post({ name: 'x'.repeat(32), color: 'red' })).status).toBe(201);
+    });
+
+    it('rejects malformed JSON with 400', async () => {
+      expect((await request(port, 'POST', '/messages', { body: '{nope', headers: auth() })).status).toBe(400);
+    });
+
+    it('rejects oversized bodies', async () => {
+      const res = await request(port, 'POST', '/messages', {
+        body: { household: { name: 'a', color: 'red', junk: 'x'.repeat(20000) } }, headers: auth()
+      });
+      expect(res.status).toBe(413);
+    });
+
+    it('returns 500 (not a crash) when a messages file is corrupt', async () => {
+      fs.writeFileSync(messagesPath('fam1'), '{not json');
+      expect((await get()).status).toBe(500);
+      expect((await post({ name: 'a', color: 'red' })).status).toBe(500);
+    });
+  });
+
+  describe('misc routes', () => {
+    it('serves /health without auth', async () => {
+      const res = await request(port, 'GET', '/health');
+      expect(res.status).toBe(200);
+      expect(res.json).toEqual({ status: 'ok' });
+    });
+
+    it('returns 404 for unknown routes of any method', async () => {
+      expect((await request(port, 'GET', '/nope')).status).toBe(404);
+      expect((await request(port, 'POST', '/nope', { body: {} })).status).toBe(404);
+    });
+
+    it('does not send CORS headers', async () => {
+      const res = await request(port, 'GET', '/messages', { headers: auth() });
+      expect(res.headers['access-control-allow-origin']).toBeUndefined();
+    });
+  });
+
+  describe('shutdown', () => {
+    it('closes the server and calls back', (done) => {
+      const extra = app.listen(0, () => {
+        app.shutdown(extra, () => {
+          expect(extra.listening).toBe(false);
+          done();
+        });
+      });
+    });
+  });
+});
