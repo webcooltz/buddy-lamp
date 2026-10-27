@@ -2,12 +2,12 @@
     -Purpose: Handle requests related to messages
     -Contains functions:
         -GET getCurrentColor()
-            -get the current color from the last message (from the ./results/messages.json file)
+            -get the current color from the last message (from the messages.json file)
             -client queries it every X interval
         -POST sendMessage()
             -receives: household
             -generates: id, date
-            -creates and saves a new message to the ./results/messages.json file
+            -creates and saves a new message to the messages.json file
             -client sends it when the user presses the lamp button
 */
 
@@ -15,248 +15,144 @@
 const fs = require('fs');
 // ---Helpers---
 const logfileModule = require('../utilities/logfile');
+const { messagesPathFor } = require('../utilities/paths');
 // ---Models---
 const Message = require('../models/message.model');
-// ---Filepaths---
-const messagesPath = './results/messages.json';
 // ---Const---
 const WHITE_COLOR = "white";
 const BLUE_COLOR = "blue";
 const RED_COLOR = "red";
 const GREEN_COLOR = "green";
 const validColors = [WHITE_COLOR, BLUE_COLOR, RED_COLOR, GREEN_COLOR];
+// Only the latest messages matter (the color comes from the last one); cap the file size
+const MAX_MESSAGES = 100;
+const MAX_NAME_LENGTH = 32;
 
 // ----------- GET messages ------------ //
 
 /* GET - getCurrentColor():
-    -get the current color from the last message and return it
-    -uses: readMessages(), getLastColor()
+    -get the current color from the family's last message and return it
+    -clients poll this every few seconds, so success is not logged (it would flood the logfile)
 */
 const getCurrentColor = (req, res) => {
-    readMessages()
-        .then((messages) => {
-            let currentColor = WHITE_COLOR;
+    try {
+        const messages = readMessages(messagesPathFor(req.family));
+        const color = getLastColor(messages);
 
-            console.log(`messages: ${messages}`);
-
-            // if no messages, return white
-            if (messages.length === 0) {
-                const warningMessage = `Warning - Cannot get current color (message.js - getCurrentColor()): No messages found.`;
-                console.log(warningMessage);
-                logfileModule.writeToLogfile(warningMessage);
-
-                res.status(200).json({
-                    color: currentColor
-                });
-            } else {
-                currentColor = getLastColor(messages);
-                currentColor = !currentColor ? WHITE_COLOR : currentColor;
-
-                const successMessage = `Success - Current color retrieved: ${currentColor}`;
-                console.log(successMessage);
-                logfileModule.writeToLogfile(successMessage);
-
-                res.status(200).json({
-                    color: currentColor
-                });
-            }
-        })
-        .catch((err) => {
-            const errorMessage = `Error - Cannot get current color (at message.js getCurrentColor()):\n${err}`;
-            console.error(errorMessage);
-            logfileModule.writeToLogfile(errorMessage);
-
-            res.status(500).json({ message: "Failed to retrieve color" });
-        });
-};
-
-/* HELPER - readMessages():
-    -read the messages.json file
-    -return the messages
-*/
-function readMessages() {
-    return new Promise((resolve, reject) => {
-        fs.readFile(messagesPath, 'utf8', (err, data) => {
-            if (err) {
-                if (err.code === 'ENOENT') { // file not found
-                    const errorMessage = `Error - File not found (at ${messagesPath}):\n${err}`;
-                    console.error(errorMessage);
-                    logfileModule.writeToLogfile(errorMessage);
-
-                    resolve([]);
-                } else {
-                    const errorMessage = `Error - Other error:\n${err}`;
-                    console.error(errorMessage);
-                    logfileModule.writeToLogfile(errorMessage);
-
-                    reject(err);
-                }
-            } else if (data === '') { // empty file
-                const warningMessage = `Warning - File is empty (at ${messagesPath}).`;
-                console.error(warningMessage);
-                logfileModule.writeToLogfile(warningMessage);
-
-                resolve([]);
-            } else { // file contains data
-                const messages = JSON.parse(data);
-
-                console.log(`messages: ${messages}`);
-
-                if (Array.isArray(messages)) {
-                    const successMessage = `Success - Messages parsed.`;
-                    console.log(successMessage);
-                    logfileModule.writeToLogfile(successMessage);
-
-                    resolve(messages);
-                } else {
-                    const errorMessage = `Error - Messages not parsed.`;
-                    console.error(errorMessage);
-                    logfileModule.writeToLogfile(errorMessage);
-
-                    reject(err);
-                }
-            }
-        });
-    });
-}
-
-/* HELPER getLastColor():
-    -get the last color from the messages (returned from readMessages())
-*/
-function getLastColor(messages) {
-    if (Array.isArray(messages) && messages.length > 0) {
-        // get color from last message
-        const lastMessage = messages[messages.length - 1];
-        let currentColor;
-
-        if (!lastMessage) {
-            currentColor = WHITE_COLOR;
-
-            const warningMessage = `Warning - Could not get current color\n--(message.js - getCurrentColor()):\n--No color found. White used.`;
-            console.log(warningMessage);
-            logfileModule.writeToLogfile(warningMessage);
-        } else {
-            currentColor = lastMessage?.household?.color || "white";
-            
-            const successMessage = `Success - Current color retrieved: ${currentColor}`;
-            console.log(successMessage);
-            logfileModule.writeToLogfile(successMessage);
-        }
-
-        return currentColor;
-    } else {
-        const errorMessage = `Error - Cannot get current color (message.js - getCurrentColor.getCurrentColor()).`;
+        res.status(200).json({ color });
+    } catch (err) {
+        const errorMessage = `Error - Cannot get current color (at message.controller.js getCurrentColor()):\n${err}`;
         console.error(errorMessage);
         logfileModule.writeToLogfile(errorMessage);
 
-        return null;
+        res.status(500).json({ message: "Failed to retrieve color" });
     }
+};
+
+/* HELPER - readMessages():
+    -read a family's messages file
+    -returns the messages array ([] if the file is missing or empty)
+    -throws if the file exists but is not a valid messages array
+*/
+function readMessages(messagesPath) {
+    let data;
+    try {
+        data = fs.readFileSync(messagesPath, 'utf8');
+    } catch (err) {
+        if (err.code === 'ENOENT') { // file not found: no messages yet
+            return [];
+        }
+        throw err;
+    }
+
+    if (data.trim() === '') { // empty file
+        return [];
+    }
+
+    const messages = JSON.parse(data);
+    if (!Array.isArray(messages)) {
+        throw new Error(`${messagesPath} does not contain a JSON array.`);
+    }
+    return messages;
+}
+
+/* HELPER getLastColor():
+    -get the color of the last message that has one (white if there is none)
+*/
+function getLastColor(messages) {
+    const lastMessage = messages[messages.length - 1];
+    const color = lastMessage?.household?.color;
+    return validColors.includes(color) ? color : WHITE_COLOR;
 }
 
 // ----------- POST message ------------ //
 
 /* POST - sendMessage()
-    -receives: household
+    -receives: household ({ name, color })
     -generates: id, date
     -saves message
-    -Uses: generateId(), saveMessage()
 */
 const sendMessage = (req, res) => {
-    // Create a new message
-    // -Generate a new ID
-    // -Generate a timestamp
-    const newId = generateId();
-    const timestamp = new Date();
-    const message = new Message(newId, timestamp, req.body.household);
-    const household = req.body.household;
+    const household = req.body?.household;
+
+    if (!household || typeof household !== 'object') {
+        return res.status(400).json({ message: "Missing household" });
+    }
+
+    const name = typeof household.name === 'string' ? household.name.trim() : '';
+    if (name.length < 1 || name.length > MAX_NAME_LENGTH) {
+        return res.status(400).json({ message: `Household name must be 1-${MAX_NAME_LENGTH} characters` });
+    }
 
     // use only valid colors (whichever LEDs we have assigned)
     if (!validateColor(household.color)) {
         return res.status(400).json({ message: "Invalid color value" });
     }
 
-    // Save the message to a JSON file
-    saveMessage(message)
-        .then(() => {
-            const successMessage = `Success - Message sent.`;
-            console.log(successMessage);
-            logfileModule.writeToLogfile(successMessage);
+    try {
+        const messagesPath = messagesPathFor(req.family);
+        const messages = readMessages(messagesPath);
+        const message = new Message(
+            generateId(messages),
+            new Date(),
+            { name, color: household.color } // drop unexpected fields
+        );
 
-            res.status(201).json({ message: 'Message sent successfully' });
-        })
-        .catch((err) => {
-            const errorMessage = `Error - Cannot send message (at message.js - sendMessage()):\n${err}`;
-            console.error(errorMessage);
-            logfileModule.writeToLogfile(errorMessage);
+        messages.push(message);
+        writeMessages(messagesPath, messages.slice(-MAX_MESSAGES));
 
-            res.status(500).json({ message: 'Message failed to send' });
-        });
+        const successMessage = `Success - Message sent (${req.family}/${name}: ${household.color}).`;
+        console.log(successMessage);
+        logfileModule.writeToLogfile(successMessage);
+
+        res.status(201).json({ message: 'Message sent successfully' });
+    } catch (err) {
+        const errorMessage = `Error - Cannot send message (at message.controller.js sendMessage()):\n${err}`;
+        console.error(errorMessage);
+        logfileModule.writeToLogfile(errorMessage);
+
+        res.status(500).json({ message: 'Message failed to send' });
+    }
 };
 
 // ------------- Helper functions ------------- //
 
 /* generateId():
-    -Generate a new numeric ID for the message
-    -Uses: getLastID()
+    -Generate a new numeric ID: one more than the last message's ID
 */
-function generateId() {
-    let counter = getLastID();
-    counter++;
-    return counter;
+function generateId(messages) {
+    const lastId = parseInt(messages[messages.length - 1]?.id, 10);
+    return Number.isNaN(lastId) ? 1 : lastId + 1;
 }
 
-/* getLastID():
-    -Get the current value of the counter from the messages JSON file
-    -Parses messages.json to get the last message ID
+/* writeMessages():
+    -Write to a temp file then rename, so a crash mid-write can't leave a corrupt messages.json
+    -Synchronous, so two requests can never interleave a read-modify-write
 */
-function getLastID() {
-    if (fs.existsSync(messagesPath)) {
-        const messagesJSON = fs.readFileSync(messagesPath, 'utf8');
-        
-        if (messagesJSON.length > 0) {
-            const messages = JSON.parse(messagesJSON);
-            const lastMessageId = parseInt(messages[messages.length - 1].id);
-            // if the last message ID is a number, return it -- otherwise, return 1
-            return !isNaN(lastMessageId) ? lastMessageId : 1;
-      }
-    }
-    // Default starting value
-    return 0;
-}
-
-/* saveMessage():
-    -Save the message to the ./results/messages JSON file
-*/
-function saveMessage(message) {
-    return new Promise((resolve, reject) => {
-        let existingData = [];
-
-        // Read the existing data from the JSON file, if any
-        if (fs.existsSync(messagesPath)) {
-            const data = fs.readFileSync(messagesPath, 'utf8');
-            existingData = data.length > 0 ? JSON.parse(data) : [];
-        }
-
-        // Add the new message to the existing data
-        existingData.push(message);
-
-        // Write the updated data to the JSON file
-        fs.writeFile(messagesPath, JSON.stringify(existingData, null, 2), 'utf8', (err) => {
-            if (err) {
-                const errorMessage = `Error - Cannot save message (at message.js - sendMessage.saveMessage()):\n${err}`;
-                console.error(errorMessage);
-                logfileModule.writeToLogfile(errorMessage);
-
-                reject(err);
-            } else {
-                const successMessage = `Success - Message saved.`;
-                console.log(successMessage);
-                logfileModule.writeToLogfile(successMessage);
-
-                resolve();
-            }
-        });
-    });
+function writeMessages(messagesPath, messages) {
+    const tmpPath = `${messagesPath}.tmp`;
+    fs.writeFileSync(tmpPath, JSON.stringify(messages, null, 2), 'utf8');
+    fs.renameSync(tmpPath, messagesPath);
 }
 
 function validateColor(color) {
